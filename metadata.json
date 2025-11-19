@@ -1,0 +1,5 @@
+{
+  "name": "Text2Markdown",
+  "description": "Instant HTML-to-Markdown converter preserving clipboard formatting.",
+  "requestFramePermissions": []
+}

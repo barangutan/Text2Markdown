@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Text2Markdown</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#2563eb',
+              secondary: '#475569',
+              accent: '#0f172a',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+          },
+        },
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+      }
+      /* Custom scrollbar for better aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+      
+      /* Placeholder for contenteditable */
+      [contenteditable]:empty:before {
+        content: attr(data-placeholder);
+        color: #94a3b8;
+        pointer-events: none;
+        display: block; /* For Firefox */
+      }
+
+      /* Visual Formatting Styles */
+      .show-formatting * {
+        position: relative;
+      }
+      
+      /* Block elements get a Pilcrow */
+      .show-formatting p::after,
+      .show-formatting h1::after,
+      .show-formatting h2::after,
+      .show-formatting h3::after,
+      .show-formatting h4::after,
+      .show-formatting h5::after,
+      .show-formatting h6::after,
+      .show-formatting li::after,
+      .show-formatting div:not(:empty):not([contenteditable]):after {
+        content: "¶";
+        color: #cbd5e1; /* light slate */
+        margin-left: 4px;
+        font-weight: normal;
+        user-select: none;
+        pointer-events: none;
+      }
+
+      /* BR tags get a return symbol */
+      .show-formatting br::after {
+        content: "↵";
+        color: #cbd5e1;
+        user-select: none;
+        pointer-events: none;
+      }
+
+      /* Toast Animation */
+      #toast {
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+      }
+      #toast.hidden-toast {
+        transform: translateY(20px);
+        opacity: 0;
+        pointer-events: none;
+      }
+      #toast.visible-toast {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "turndown": "https://esm.sh/turndown@7.2.0",
+    "turndown-plugin-gfm": "https://esm.sh/turndown-plugin-gfm@1.0.2"
+  }
+}
+</script>
+</head>
+  <body class="text-slate-900 min-h-screen flex flex-col">
+    
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <div class="max-w-[1600px] mx-auto px-4 md:px-6 h-16 flex items-center justify-between bg-white border-b border-slate-200">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-white w-5 h-5">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-slate-900 leading-none tracking-tight">Text2Markdown</h1>
+            <p class="text-[10px] font-medium text-slate-500 uppercase tracking-wider mt-0.5">Offline Converter</p>
+          </div>
+        </div>
+        
+        <div class="text-xs font-medium text-slate-400 hidden sm:block">
+          Preserves Clipboard Formatting
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Application -->
+    <main class="flex-grow p-4 md:p-6 max-w-[1600px] mx-auto w-full">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-140px)] min-h-[600px]">
+        
+        <!-- Left Column: Input -->
+        <div class="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div class="flex gap-1 bg-slate-200/50 p-1 rounded-lg">
+              <button id="btn-mode-clean" class="px-3 py-1.5 text-xs font-medium rounded-md transition-all bg-white text-slate-700 shadow-sm">
+                Without Formatting
+              </button>
+              <button id="btn-mode-format" class="px-3 py-1.5 text-xs font-medium rounded-md transition-all text-slate-500 hover:text-slate-700">
+                With Formatting
+              </button>
+            </div>
+            
+            <div class="flex gap-2">
+               <button id="btn-clear" class="text-xs font-medium text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors">
+                Clear
+              </button>
+            </div>
+          </div>
+          
+          <!-- Editor Container -->
+          <div class="flex-1 flex flex-col relative group overflow-hidden">
+            <!-- Clean Editor -->
+            <div
+              id="editor"
+              contenteditable="true"
+              class="flex-1 w-full p-5 outline-none focus:outline-none overflow-y-auto font-sans text-sm text-slate-700 bg-white leading-relaxed min-h-[300px] prose prose-sm max-w-none empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
+              data-placeholder="Paste your formatted text here (Word, Google Docs, Website)..."
+              spellcheck="false"
+            ></div>
+            
+            <!-- Formatting Visualizer (Hidden by default) -->
+            <div
+              id="visualizer"
+              class="hidden flex-1 w-full p-5 overflow-y-auto font-sans text-sm text-slate-600 bg-slate-50 leading-relaxed min-h-[300px] prose prose-sm max-w-none show-formatting"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Right Column: Output -->
+        <div class="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h2 class="font-semibold text-slate-700 flex items-center gap-2 px-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Markdown Code
+            </h2>
+            <button id="btn-copy" class="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy
+            </button>
+          </div>
+
+          <div class="flex-1 overflow-hidden relative bg-white">
+            <textarea 
+              id="output"
+              readonly
+              class="w-full h-full p-6 text-sm font-mono text-slate-700 bg-slate-50 resize-none outline-none focus:bg-white transition-colors"
+              placeholder="Markdown output will appear here..."
+            ></textarea>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden-toast bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-400"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      <span class="text-sm font-medium">Markdown copied to clipboard!</span>
+    </div>
+
+    <script type="module">
+      import TurndownService from 'turndown';
+      import { gfm } from 'turndown-plugin-gfm';
+
+      // --- Services ---
+      const turndownService = new TurndownService({
+        headingStyle: 'atx',
+        codeBlockStyle: 'fenced',
+        bulletListMarker: '-',
+        emDelimiter: '*'
+      });
+      turndownService.use(gfm);
+      turndownService.addRule('removeScripts', {
+        filter: ['script', 'style', 'noscript'],
+        replacement: () => ''
+      });
+
+      // --- DOM Elements ---
+      const editor = document.getElementById('editor');
+      const visualizer = document.getElementById('visualizer');
+      const output = document.getElementById('output');
+      const btnClean = document.getElementById('btn-mode-clean');
+      const btnFormat = document.getElementById('btn-mode-format');
+      const btnClear = document.getElementById('btn-clear');
+      const btnCopy = document.getElementById('btn-copy');
+      const toast = document.getElementById('toast');
+
+      let viewMode = 'clean'; // 'clean' | 'formatting'
+
+      // --- Logic ---
+
+      function convert() {
+        const htmlContent = editor.innerHTML;
+        if (!htmlContent.trim()) {
+          output.value = '';
+          return;
+        }
+        try {
+          const markdown = turndownService.turndown(htmlContent);
+          output.value = markdown;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      function updateVisualizer() {
+        const rawHtml = editor.innerHTML;
+        if (!rawHtml.trim()) {
+          visualizer.innerHTML = '<span class="text-slate-400 italic">No content to visualize</span>';
+          return;
+        }
+
+        // Clone structure to perform text replacement
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = rawHtml;
+
+        const walk = (node) => {
+          if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
+             // Replace spaces with Middle Dot (U+00B7)
+             // Replace tabs with Rightwards Arrow (U+2192)
+             node.nodeValue = node.nodeValue
+                .replace(/ /g, '\u00B7') 
+                .replace(/\t/g, '\u2192');
+          } else {
+            node.childNodes.forEach(walk);
+          }
+        };
+        walk(tempDiv);
+        visualizer.innerHTML = tempDiv.innerHTML;
+      }
+
+      function setViewMode(mode) {
+        viewMode = mode;
+        if (mode === 'clean') {
+          editor.classList.remove('hidden');
+          visualizer.classList.add('hidden');
+          
+          btnClean.className = "px-3 py-1.5 text-xs font-medium rounded-md transition-all bg-white text-slate-700 shadow-sm";
+          btnFormat.className = "px-3 py-1.5 text-xs font-medium rounded-md transition-all text-slate-500 hover:text-slate-700";
+        } else {
+          // Update visualizer before showing
+          updateVisualizer();
+          editor.classList.add('hidden');
+          visualizer.classList.remove('hidden');
+
+          btnClean.className = "px-3 py-1.5 text-xs font-medium rounded-md transition-all text-slate-500 hover:text-slate-700";
+          btnFormat.className = "px-3 py-1.5 text-xs font-medium rounded-md transition-all bg-white text-emerald-600 shadow-sm";
+        }
+      }
+
+      function showToast() {
+        toast.classList.remove('hidden-toast');
+        toast.classList.add('visible-toast');
+        setTimeout(() => {
+          toast.classList.remove('visible-toast');
+          toast.classList.add('hidden-toast');
+        }, 2000);
+      }
+
+      // --- Event Listeners ---
+
+      editor.addEventListener('input', () => {
+        convert();
+      });
+
+      // Handle contenteditable quirks: ensure convert runs on paste
+      editor.addEventListener('paste', (e) => {
+        // Let the paste happen, then convert
+        setTimeout(convert, 0);
+      });
+
+      btnClean.addEventListener('click', () => setViewMode('clean'));
+      btnFormat.addEventListener('click', () => setViewMode('formatting'));
+
+      btnClear.addEventListener('click', () => {
+        editor.innerHTML = '';
+        visualizer.innerHTML = '';
+        output.value = '';
+        if (viewMode === 'formatting') updateVisualizer();
+      });
+
+      btnCopy.addEventListener('click', async () => {
+        if (!output.value) return;
+        try {
+          await navigator.clipboard.writeText(output.value);
+          showToast();
+        } catch (err) {
+          console.error('Failed to copy', err);
+        }
+      });
+
+      // Initial run
+      convert();
+
+    </script>
+  </body>
+</html>
